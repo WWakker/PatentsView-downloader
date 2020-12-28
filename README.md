@@ -1,4 +1,4 @@
-# Patentsview-downloader
+# PatentsView downloader
 Download data through the patent endpoint of the PatentsView API by date
 
 ## Example
