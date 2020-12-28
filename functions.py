@@ -18,7 +18,7 @@ def patentsview_query(fields, startdate, enddate, page, per_page, force_retry, t
             force_retry (bool): retry automatically when error occurs
             time_retry (int)  : timeout before retrying in seconds
         Returns:
-            r (dict): Results from PatentsView query   
+            request.json() (dict): Results from PatentsView query   
     """
 
     # Set up query parameters
@@ -29,8 +29,8 @@ def patentsview_query(fields, startdate, enddate, page, per_page, force_retry, t
     # Make POST request to API
     retry = True
     while retry:
-        r = requests.post('https://api.patentsview.org/patents/query', json=payload)
-        if r.status_code == 200:
+        request = requests.post('https://api.patentsview.org/patents/query', json=payload)
+        if request.status_code == 200:
             retry = False
         else:
             print('Error {}, reason: {}'.format(r.status_code, r.reason))
@@ -49,7 +49,7 @@ def patentsview_query(fields, startdate, enddate, page, per_page, force_retry, t
                     raise KeyboardInterrupt
                 else:
                     print('Input must be y or n')
-    return r.json()
+    return request.json()
 
 
 def get_patentsview_data(fields, startdate, enddate, per_page, force_retry, time_retry):
@@ -84,14 +84,14 @@ def get_patentsview_data(fields, startdate, enddate, per_page, force_retry, time
     no_patents = 0
     page = 1
     while no_patents < count:
-        r = patentsview_query(fields=fields,
+        query = patentsview_query(fields=fields,
                               startdate=startdate,
                               enddate=enddate,
                               page=page,
                               per_page=per_page,
                               force_retry=force_retry,
                               time_retry=time_retry)
-        data['patents'].extend(r['patents'])
+        data['patents'].extend(query['patents'])
         no_patents += per_page
         page += 1
     return data
@@ -110,7 +110,7 @@ def patentsvsiew_query_to_dfs(fields, startdate, enddate, per_page=10000, force_
             force_retry (bool): retry automatically when error occurs
             time_retry (int)  : timeout before retrying in seconds, default 1
         Returns:
-            d (dict): Dictionary of dataframes for each group returned by PatentsView 
+            dfs (dict): Dictionary of dataframes for each group returned by PatentsView 
     """
     
     if 'patent_number' not in fields:
@@ -130,16 +130,16 @@ def patentsvsiew_query_to_dfs(fields, startdate, enddate, per_page=10000, force_
     patents_field_list = [col for col in df.columns if col not in ['inventors', 'rawinventors', 'assignees', 'applications', 'IPCs', 'application_citations', 'cited_patents', 'citedby_patents', 'uspcs', 'cpcs', 'nbers', 'wipos', 'gov_interests', 'lawyers', 'examiners', 'foreign_priority', 'pct_data']]
     explode = [col for col in ['gov_interests', 'inventors', 'rawinventors', 'assignees', 'IPCs', 'application_citations', 'cited_patents', 'citedby_patents', 'uspcs', 'cpcs', 'wipos', 'lawyers', 'examiners', 'foreign_priority', 'pct_data'] if col in df.columns]
     other = [col for col in ['applications', 'nbers'] if col in df.columns]
-    d = {'patent': df[patents_field_list]}
+    dfs = {'patent': df[patents_field_list]}
     for cat in other:
-        d[cat] = df[['patent_number', cat]]
-        d[cat] = d[cat].join(pd.json_normalize(df[cat].explode())).drop(columns=cat)
+        dfs[cat] = df[['patent_number', cat]]
+        dfs[cat] = dfs[cat].join(pd.json_normalize(dfs[cat].explode())).drop(columns=cat)
         if cat == 'applications':
-            d[cat].drop(columns='app_id', inplace=True)
+            dfs[cat].drop(columns='app_id', inplace=True)
     for cat in explode:
-        d[cat] = df[['patent_number', cat]]
-        d[cat] = d[cat].explode(cat).reset_index(drop=True)
-        d[cat] = d[cat].join(pd.json_normalize(d[cat][cat])).drop(columns=cat)
+        dfs[cat] = df[['patent_number', cat]]
+        dfs[cat] = dfs[cat].explode(cat).reset_index(drop=True)
+        dfs[cat] = dfs[cat].join(pd.json_normalize(dfs[cat][cat])).drop(columns=cat)
         if cat in ['inventors', 'assignees']:
-            d[cat].drop(columns='{}_key_id'.format(cat[:-1]), inplace=True)
-    return d
+            dfs[cat].drop(columns='{}_key_id'.format(cat[:-1]), inplace=True)
+    return dfs
