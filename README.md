@@ -1,5 +1,5 @@
 # PatentsView downloader
-Download data through the patent endpoint of the PatentsView API by date
+Download data through the patent endpoint of the PatentsView API by date.
 
 ## Example
 Download data for January 2019 and write to csv files.
