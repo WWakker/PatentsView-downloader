@@ -6,6 +6,7 @@ Download data for January 2019 and write to csv files.
 ```python
 import pandas as pd
 
+# Fields from https://api.patentsview.org/patent.html#field_list
 fields = ['patent_number', 
           'patent_abstract',
           'patent_date',
