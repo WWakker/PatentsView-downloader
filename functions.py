@@ -2,22 +2,24 @@ import requests
 import pandas as pd
 import numpy as np
 import time
-import paths
-import csv
-from zipfile import ZipFile
 
 
 def patentsview_query(fields, startdate, enddate, page, per_page, force_retry, time_retry):
-    # Query the Patenstview API for dates from startdate up to (not including)
-    # enddate, one page only.
-    # Input:
-    #    - Fields for API to return
-    #    - Startdate in format 'YYYY-MM-DD'
-    #    - Enddate in format 'YYYY-MM-DD'
-    #    - Page number (10000 results per page maximum)
-    #    - Results per page (max 10000)
-    # Output:
-    #    - Dictionary with query results
+    """
+    Returns one page of a PatentsView query
+    
+        Parameters:
+            fields (list)     : list of patentsview fields to be downloaded, 
+                                see: https://api.patentsview.org/patent.html#field_list
+            startdate (str)   : Startdate in format 'YYYY-MM-DD'
+            enddate (str)     : Enddate in format 'YYYY-MM-DD', not inclusive
+            page (int)        : page number
+            per_page (int)    : Results per page (max 10000)
+            force_retry (bool): retry automatically when error occurs
+            time_retry (int)  : timeout before retrying in seconds
+        Returns:
+            r (dict): Results from PatentsView query   
+    """
 
     # Set up query parameters
     query = {'_and': [{'_gte': {'patent_date': startdate}}, {'_lt': {'patent_date': enddate}}]}
@@ -50,16 +52,21 @@ def patentsview_query(fields, startdate, enddate, page, per_page, force_retry, t
     return r.json()
 
 
-def get_patent_data(fields, startdate, enddate, per_page, force_retry, time_retry):
-    # Query the Patenstview API for dates from startdate up to (not including)
-    # enddate, append all pages.
-    # Input:
-    #    - Fields for API to return
-    #    - Startdate in format 'YYYY-MM-DD'
-    #    - Enddate in format 'YYYY-MM-DD'
-    #    - Results per page (max 10000)
-    # Output:
-    #    - Dictionary with query results
+def get_patentsview_data(fields, startdate, enddate, per_page, force_retry, time_retry):
+    """
+    Appends all pages of a PatentsView query
+    
+        Parameters:
+            fields (list)     : list of patentsview fields to be downloaded, 
+                                see: https://api.patentsview.org/patent.html#field_list
+            startdate (str)   : Startdate in format 'YYYY-MM-DD'
+            enddate (str)     : Enddate in format 'YYYY-MM-DD', not inclusive
+            per_page (int)    : Results per page (max 10000)
+            force_retry (bool): retry automatically when error occurs
+            time_retry (int)  : timeout before retrying in seconds
+        Returns:
+            data (dict): Appended results from PatentsView query   
+    """
 
     # Make an initial query to get total count of patents between dates
     initial_query = patentsview_query(['patent_number'],
@@ -70,7 +77,7 @@ def get_patent_data(fields, startdate, enddate, per_page, force_retry, time_retr
                                       force_retry=force_retry,
                                       time_retry=time_retry)
     count = initial_query['total_patent_count']
-    assert count < 100000, 'Results count: {}'.format(count)
+    assert count < 10000, 'Results count: {}, must be less than 10000'.format(count)
 
     # Request all results by page and append
     data = {'patents': []}
@@ -90,27 +97,24 @@ def get_patent_data(fields, startdate, enddate, per_page, force_retry, time_retr
     return data
 
 
-def query_to_df(fields, startdate, enddate, per_page=10000, force_retry=False, time_retry=60):
-    # Query the Patenstview API for dates from startdate up to (not including)
-    # enddate, process them into pandas dataframe.
-    # Input:
-    #    - Fields for API to return
-    #    - Startdate in format 'YYYY-MM-DD'
-    #    - Enddate in format 'YYYY-MM-DD'
-    #    - Results per page (max 10000)
-    #    - Force retry flag
-    #         In some cases the API returns a 500 internal server error.
-    #         Often, you can just try again. If force_retry=False you
-    #         will be asked if you want to retry or not. If force_retry=
-    #         True it will try again without asking.
-    #    - Time between retries in seconds, only relevant when
-    #      force_retry=True
-    # Output:
-    #    - Dictionary of pandas dataframes
-    #        - Patent
-    #        - Assignee
-    #        - Inventor
-    #        - CPC
+def patentsvsiew_query_to_dfs(fields, startdate, enddate, per_page=10000, force_retry=False, time_retry=1):
+    """
+    Queries the patent endpoint of the Patentsview API end transforms the data to proper pandas dataframes
+    
+        Parameters:
+            fields (list)     : list of patentsview fields to be downloaded, 
+                                see: https://api.patentsview.org/patent.html#field_list
+            startdate (str)   : Startdate in format 'YYYY-MM-DD'
+            enddate (str)     : Enddate in format 'YYYY-MM-DD', not inclusive
+            per_page (int)    : Results per page (max 10000)
+            force_retry (bool): retry automatically when error occurs
+            time_retry (int)  : timeout before retrying in seconds, default 1
+        Returns:
+            d (dict): Dictionary of dataframes for each group returned by PatentsView 
+    """
+    
+    if 'patent_number' not in fields:
+        fields.append('patent_number')
 
     # Get all data between dates in dictionary format
     print('Querying: {} to {}...'.format(startdate, enddate))
@@ -123,16 +127,19 @@ def query_to_df(fields, startdate, enddate, per_page=10000, force_retry=False, t
 
     # Process to pandas dataframes
     df = pd.DataFrame(data['patents'])
-    for col in ['applications', 'nbers']:
-        df[col] = df[col].explode()
-    d = {'patent': df[
-        ['patent_number', 'patent_year', 'patent_date', 'patent_processing_time', 'patent_average_processing_time',
-         'patent_kind', 'patent_type', 'patent_title']].join(pd.json_normalize(df.applications)).join(
-        pd.json_normalize(df.nbers)).drop(columns='app_id')}
-    for cat in ['assignee', 'inventor', 'cpc']:
-        d[cat] = df[['patent_number', '{}s'.format(cat)]]
-        d[cat] = d[cat].explode('{}s'.format(cat)).reset_index(drop=True)
-        d[cat] = d[cat].join(pd.json_normalize(d[cat]['{}s'.format(cat)])).drop(columns='{}s'.format(cat))
-        if cat != 'cpc':
-            d[cat].drop(columns='{}_key_id'.format(cat), inplace=True)
+    patents_field_list = [col for col in df.columns if col not in ['inventors', 'rawinventors', 'assignees', 'applications', 'IPCs', 'application_citations', 'cited_patents', 'citedby_patents', 'uspcs', 'cpcs', 'nbers', 'wipos', 'gov_interests', 'lawyers', 'examiners', 'foreign_priority', 'pct_data']]
+    explode = [col for col in ['gov_interests', 'inventors', 'rawinventors', 'assignees', 'IPCs', 'application_citations', 'cited_patents', 'citedby_patents', 'uspcs', 'cpcs', 'wipos', 'lawyers', 'examiners', 'foreign_priority', 'pct_data'] if col in df.columns]
+    other = [col for col in ['applications', 'nbers'] if col in df.columns]
+    d = {'patent': df[patents_field_list]}
+    for cat in other:
+        d[cat] = df[['patent_number', cat]]
+        d[cat] = d[cat].join(pd.json_normalize(df[cat].explode())).drop(columns=cat)
+        if cat == 'applications':
+            d[cat].drop(columns='app_id', inplace=True)
+    for cat in explode:
+        d[cat] = df[['patent_number', cat]]
+        d[cat] = d[cat].explode(cat).reset_index(drop=True)
+        d[cat] = d[cat].join(pd.json_normalize(d[cat][cat])).drop(columns=cat)
+        if cat in ['inventors', 'assignees']:
+            d[cat].drop(columns='{}_key_id'.format(cat[:-1]), inplace=True)
     return d
