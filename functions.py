@@ -77,7 +77,7 @@ def get_patentsview_data(fields, startdate, enddate, per_page, force_retry, time
                                       force_retry=force_retry,
                                       time_retry=time_retry)
     count = initial_query['total_patent_count']
-    assert count < 10000, 'Results count: {}, must be less than 10000'.format(count)
+    assert count < 100000, 'Results count: {}, must be less than 100000'.format(count)
 
     # Request all results by page and append
     data = {'patents': []}
@@ -118,7 +118,7 @@ def patentsvsiew_query_to_dfs(fields, startdate, enddate, per_page=10000, force_
 
     # Get all data between dates in dictionary format
     print('Querying: {} to {}...'.format(startdate, enddate))
-    data = get_patent_data(fields=fields,
+    data = get_patentsview_data(fields=fields,
                            startdate=startdate,
                            enddate=enddate,
                            per_page=per_page,
