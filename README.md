@@ -5,6 +5,7 @@ Download data through the patent endpoint of the PatentsView API by date.
 Download data for January 2019 and write to csv files.
 ```python
 import pandas as pd
+import functions
 
 # Fields from https://api.patentsview.org/patent.html#field_list
 fields = ['patent_number', 
@@ -15,12 +16,12 @@ fields = ['patent_number',
           'inventor_id', 
           'inventor_country']
 
-dfs = patentsvsiew_query_to_dfs(fields=fields, 
-                                startdate='2019-01-01', 
-                                enddate='2019-02-01', 
-                                per_page=10000, 
-                                force_retry=True, 
-                                time_retry=1)
+dfs = functions.patentsvsiew_query_to_dfs(fields=fields, 
+                                          startdate='2019-01-01', 
+                                          enddate='2019-02-01', 
+                                          per_page=10000, 
+                                          force_retry=True, 
+                                          time_retry=1)
                               
 for group, df in dfs.items():
     df.to_csv('YOUR/PATH/HERE/{}.csv'.format(group), index=False)
